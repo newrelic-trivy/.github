@@ -1,0 +1,80 @@
+name: 'Organization Vulnerability Scan'
+
+on:
+  workflow_call:
+    inputs:
+      image-name:
+        description: 'The full name of the Docker image to scan'
+        required: true
+        type: string
+    secrets:
+      TEAM_SLACK_WEBHOOK_URL:
+        description: 'Slack webhook for team-specific vulnerability alerts'
+        required: false
+
+jobs:
+  vulnerability-scan:
+    name: Trivy Vulnerability Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Trivy for console output (All Vulnerabilities)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ inputs.image-name }}
+          scan-type: 'image'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN'
+          ignore-unfixed: false
+          format: 'table'
+          exit-code: '0'
+
+      - name: Run Trivy for SARIF report (Fixed Vulnerabilities Only)
+        id: trivy_sarif_scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ inputs.image-name }}
+          scan-type: 'image'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN'
+          ignore-unfixed: true
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          exit-code: '1'
+        continue-on-error: true
+
+      - name: Upload Trivy SARIF report to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+          category: 'trivy'
+        if: always()
+
+      - name: Send Slack Notification on Failure
+        if: steps.trivy_sarif_scan.outcome == 'failure' && secrets.TEAM_SLACK_WEBHOOK_URL
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": { "type": "mrkdwn", "text": "🚨 *Vulnerability Alert in `${{ github.repository }}`*" }
+                },
+                {
+                  "type": "section",
+                  "text": { "type": "mrkdwn", "text": "High or critical vulnerabilities with an available fix were detected." }
+                },
+                {
+                  "type": "actions",
+                  "elements": [ { "type": "button", "text": { "type": "plain_text", "text": "View Workflow Run" }, "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" } ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.TEAM_SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
