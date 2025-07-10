@@ -18,11 +18,22 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      packages: read
       security-events: write
+
+    env:
+      SLACK_WEBHOOK_URL_SET: ${{ secrets.TEAM_SLACK_WEBHOOK_URL != '' }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run Trivy for console output (All Vulnerabilities)
         uses: aquasecurity/trivy-action@master
@@ -47,15 +58,29 @@ jobs:
           exit-code: '1'
         continue-on-error: true
 
+      # Check if the SARIF file has content 
+      - name: Check if SARIF report has content
+        id: check_sarif
+        run: |
+          # If the trivy-results.sarif file exists and is larger than a few bytes (i.e., not empty),
+          # set the output 'sarif_has_content' to true.
+          if [ -s trivy-results.sarif ] && [ $(wc -c < trivy-results.sarif) -gt 2 ]; then
+            echo "sarif_has_content=true" >> $GITHUB_OUTPUT
+          else
+            echo "sarif_has_content=false" >> $GITHUB_OUTPUT
+          fi
+        if: always() # Ensure this check runs even if the previous step failed
+
+      # Upload on condition
       - name: Upload Trivy SARIF report to GitHub Security
+        # checks the output if ignore-unfixed is true throws an output
+        if: steps.check_sarif.outputs.sarif_has_content == 'true'
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: 'trivy-results.sarif'
-          category: 'trivy'
-        if: always()
 
       - name: Send Slack Notification on Failure
-        if: steps.trivy_sarif_scan.outcome == 'failure' && secrets.TEAM_SLACK_WEBHOOK_URL
+        if: steps.trivy_sarif_scan.outcome == 'failure' && env.SLACK_WEBHOOK_URL_SET == 'true'
         uses: slackapi/slack-github-action@v1.26.0
         with:
           payload: |
