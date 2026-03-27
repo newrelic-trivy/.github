@@ -37,7 +37,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run Trivy for console output (All Vulnerabilities)
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: ${{ inputs.image-name }}
           scan-type: 'image'
@@ -47,7 +47,7 @@ jobs:
           exit-code: '0'
 
       - name: Run Trivy for console output (Fixed Vulnerabilities)
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: ${{ inputs.image-name }}
           scan-type: 'image'
@@ -58,7 +58,7 @@ jobs:
 
       - name: Run Trivy for SARIF report (Fixed Vulnerabilities Only)
         id: trivy_sarif_scan
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: ${{ inputs.image-name }}
           scan-type: 'image'
