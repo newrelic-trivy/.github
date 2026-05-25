@@ -36,7 +36,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run Trivy for console output (All Vulnerabilities)
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: ${{ inputs.image-name }}
           scan-type: 'image'
@@ -45,8 +45,8 @@ jobs:
           format: 'table'
           exit-code: '0'
 
-      - name: Run Trivy for console output (All Vulnerabilities) unfixed
-        uses: aquasecurity/trivy-action@master
+      - name: Run Trivy for console output (Fixed Vulnerabilities)
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: ${{ inputs.image-name }}
           scan-type: 'image'
@@ -57,7 +57,7 @@ jobs:
 
       - name: Run Trivy for SARIF report (Fixed Vulnerabilities Only)
         id: trivy_sarif_scan
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: ${{ inputs.image-name }}
           scan-type: 'image'
@@ -68,7 +68,6 @@ jobs:
           exit-code: '1'
         continue-on-error: true
 
-      # Check if the SARIF file has content 
       - name: Check if SARIF report has content
         id: check_sarif
         run: |
@@ -79,11 +78,10 @@ jobs:
           else
             echo "sarif_has_content=false" >> $GITHUB_OUTPUT
           fi
-        if: always() # Ensure this check runs even if the previous step failed
+        if: always()
 
       # Upload on condition
       - name: Upload Trivy SARIF report to GitHub Security
-        # checks the output if ignore-unfixed is true throws an output
         if: steps.check_sarif.outputs.sarif_has_content == 'true'
         uses: github/codeql-action/upload-sarif@v3
         with:
